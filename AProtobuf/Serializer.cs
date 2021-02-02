@@ -164,8 +164,6 @@ namespace AProtobuf
                 var fieldNumber = Convert.ToInt64(parts[0]);
                 var type = parts[1];
 
-                Console.WriteLine(fieldNumber);
-
                 var header = (fieldNumber << 3) | TagMap[type];
                 Varint.Write(ms, header);
 

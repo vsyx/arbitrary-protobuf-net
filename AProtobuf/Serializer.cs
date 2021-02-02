@@ -50,7 +50,10 @@ namespace AProtobuf
                         break;
                     case Tag.Bit32:
                         Span<byte> buf32 = new byte[4];
-                        ms.Read(buf32);
+                        if (ms.Read(buf32) != buf32.Length)
+                        {
+                            throw new Exception("Invalid Bit32 length");
+                        }
 
                         try {
                             dictionary[$"{fieldStr}:float32"] = BitConverter.ToSingle(buf32);
@@ -62,7 +65,10 @@ namespace AProtobuf
                         break;
                     case Tag.Bit64:
                         Span<byte> buf64 = new byte[8];
-                        ms.Read(buf64);
+                        if (ms.Read(buf64) != buf64.Length)
+                        {
+                            throw new Exception("Invalid Bit64 length");
+                        }
 
                         try {
                             dictionary[$"{fieldStr}:float64"] = BitConverter.ToDouble(buf64);

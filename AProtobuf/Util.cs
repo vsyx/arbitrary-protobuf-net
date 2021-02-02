@@ -8,12 +8,19 @@ namespace AProtobuf
         // System.Convert Base64 convertion requires padding to be present
         public static byte[] FromBase64StringWithoutPadding(string str)
         {
-            int padding = str.Length % 4;
+            int rem = str.Length % 4;
 
-            if (padding != 0)
+            if (rem == 1)
             {
+                throw new Exception("Impossible base64 padding");
+            }
+
+            if (rem != 0)
+            {
+                var paddingCount = 4 - rem;
+
                 str = new StringBuilder(str)
-                    .Append('=', padding)
+                    .Append('=', paddingCount)
                     .ToString();
             }
 

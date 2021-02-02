@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using System.Text.Json;
 using System.Web;
 
 namespace AProtobuf
@@ -84,7 +83,10 @@ namespace AProtobuf
                         }
 
                         byte[] buf = new byte[length];
-                        ms.Read(buf);
+                        if (ms.Read(buf, 0, (int)length) != length)
+                        {
+                            throw new Exception("Malformed LengthDelimited");
+                        }
 
                         // no checks for repeated elements
                         try
@@ -102,7 +104,6 @@ namespace AProtobuf
                                 try
                                 {
                                     var payload = Util.FromBase64StringWithoutPadding(HttpUtility.UrlDecode(bufStr));
-
                                     using var innerMs = new MemoryStream(payload);
                                     dictionary[$"{fieldStr}:base64"] = SerializeAsHashtable(innerMs);
                                 }

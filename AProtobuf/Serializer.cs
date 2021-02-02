@@ -275,10 +275,10 @@ namespace AProtobuf
                                     using var base64ms = new MemoryStream();
                                     Deserialize(base64ms, element.Value);
 
-                                    Varint.Write(ms, base64ms.Length);
+                                    var buf = Encoding.UTF8.GetBytes(UrlBase64.Encode(base64ms.ToArray()));
+                                    Varint.Write(ms, buf.Length);
 
-                                    Console.WriteLine(element.Value);
-                                    base64ms.WriteTo(ms);
+                                    ms.Write(buf);
                                     break;
                                 }
                                 case JsonValueKind.String:
@@ -300,7 +300,7 @@ namespace AProtobuf
                             break;
                         }
                     case "bytes": 
-                        string byteStr = element.Value.GetString();
+                        var byteStr = element.Value.GetString();
                         Varint.Write(ms, byteStr.Length);
                         ms.Write(Encoding.UTF8.GetBytes(byteStr));
                         break;

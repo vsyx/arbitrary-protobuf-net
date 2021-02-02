@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Web;
 
 namespace AProtobuf
@@ -23,6 +24,7 @@ namespace AProtobuf
         public static Hashtable SerializeAsHashtable(MemoryStream ms)
         {
             Hashtable dictionary = new Hashtable();
+            int index = 0; // needed for repeated elements (assuming that you want to keep within a dict)
 
             while (ms.Position != ms.Length)
             {
@@ -40,7 +42,7 @@ namespace AProtobuf
                 long fieldNumber = (long)header >> 3;
                 Tag wireType = (Tag)(header & 0x7);
 
-                string fieldStr = fieldNumber.ToString();
+                string fieldStr = fieldNumber.ToString() + ":" + index.ToString();
 
                 switch (wireType)
                 {
@@ -95,43 +97,38 @@ namespace AProtobuf
                                 break;
                             }
 
-                            // this could still be anything
-                            try // base64
+                            if (!ContainsNonFeedControlCharacters(buf))
                             {
-                                var payload = Util.FromBase64StringWithoutPadding(HttpUtility.UrlDecode(bufStr));
-
-                                using var innerMs = new MemoryStream(payload);
-                                dictionary[$"{fieldStr}:base64"] = SerializeAsHashtable(innerMs);
-                            }
-                            catch 
-                            {
-                                try // embedded
+                                try
                                 {
-                                    using var innerMs = new MemoryStream(buf);
-                                    dictionary[$"{fieldStr}:embedded"] = SerializeAsHashtable(innerMs);
+                                    var payload = Util.FromBase64StringWithoutPadding(HttpUtility.UrlDecode(bufStr));
+
+                                    using var innerMs = new MemoryStream(payload);
+                                    dictionary[$"{fieldStr}:base64"] = SerializeAsHashtable(innerMs);
                                 }
                                 catch
                                 {
                                     dictionary[$"{fieldStr}:string"] = bufStr;
                                 }
+                                break;
                             }
                         }
-                        catch (ArgumentException) // bad utf8
+                        catch (ArgumentException) {  } // bad utf8
+
+                        try 
                         {
-                            try // embedded
-                            {
-                                using var innerMs = new MemoryStream(buf);
-                                dictionary[$"{fieldStr}:embedded"] = SerializeAsHashtable(innerMs);
-                            }
-                            catch // bytes
-                            {
-                                dictionary[$"{fieldStr}:bytes"] = buf;
-                            }
+                            using var innerMs = new MemoryStream(buf);
+                            dictionary[$"{fieldStr}:embedded"] = SerializeAsHashtable(innerMs);
+                        }
+                        catch 
+                        {
+                            dictionary[$"{fieldStr}:bytes"] = buf;
                         }
                         break;
                     default:
                         throw new Exception($"Couldn't match wiretype : {wireType}");
                 }
+                index++;
             }
             return dictionary;
         }
@@ -162,7 +159,7 @@ namespace AProtobuf
             {
                 var parts = element.Key.ToString().Split(':');
                 var fieldNumber = Convert.ToInt64(parts[0]);
-                var type = parts[1];
+                var type = parts[2];
 
                 var header = (fieldNumber << 3) | TagMap[type];
                 Varint.Write(ms, header);
@@ -217,6 +214,24 @@ namespace AProtobuf
                         throw new Exception("Unknown wireType");
                 }
             }
+        }
+
+        private static bool ContainsNonFeedControlCharacters(byte[] buffer)
+        {
+            foreach (var b in buffer)
+            {
+                if (b >= 0x0 && b <= 0x1f)
+                {
+                    // feed
+                    if (b == 0x09 || b == 0x0a || b == 0x0d)
+                    {
+                        continue;
+                    }
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

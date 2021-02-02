@@ -6,6 +6,8 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Web;
+using NeoSmart.Utils;
+
 
 namespace AProtobuf
 {
@@ -110,7 +112,7 @@ namespace AProtobuf
                             {
                                 try
                                 {
-                                    var payload = Util.FromBase64StringWithoutPadding(HttpUtility.UrlDecode(bufStr));
+                                    var payload = UrlBase64.Decode(HttpUtility.UrlDecode(bufStr));
                                     using var innerMs = new MemoryStream(payload);
                                     dictionary[$"{fieldStr}:base64"] = SerializeAsHashtable(innerMs);
                                 }
@@ -198,6 +200,7 @@ namespace AProtobuf
                         {
                             using var base64ms = new MemoryStream();
                             Deserialize(base64ms, (Hashtable)element.Value);
+                            base64ms.Position = 0;
 
                             var base64Buffer = Encoding.UTF8.GetBytes(Convert.ToBase64String(base64ms.ToArray()));
                             Varint.Write(ms, base64Buffer.Length);
@@ -209,6 +212,7 @@ namespace AProtobuf
                         {
                             using var embeddedMs = new MemoryStream();
                             Deserialize(embeddedMs, (Hashtable)element.Value);
+                            embeddedMs.Position = 0;
 
                             Varint.Write(ms, (long)embeddedMs.Length);
                             embeddedMs.CopyTo(ms);
@@ -218,6 +222,87 @@ namespace AProtobuf
                         var buffer = (byte[])element.Value;
                         Varint.Write(ms, buffer.Length);
                         ms.Write(buffer);
+                        break;
+                    default:
+                        throw new Exception("Unknown WireType");
+                }
+            }
+        }
+
+        public static void Deserialize(MemoryStream ms, JsonElement json)
+        {
+            var enumerate = json.EnumerateObject();
+
+            while (enumerate.MoveNext())
+            {
+                var element = enumerate.Current;
+
+                var parts = element.Name.ToString().Split(':');
+                var fieldNumber = Convert.ToInt64(parts[0]);
+                var type = parts[parts.Length - 1];
+
+                var header = (fieldNumber << 3) | TagMap[type];
+                Varint.Write(ms, header);
+
+                switch (type)
+                {
+                    case "varint":
+                        Varint.Write(ms, element.Value.GetInt64());
+                        break;
+                    case "int32":
+                        ms.Write(BitConverter.GetBytes(element.Value.GetInt32()));
+                        break;
+                    case "float32":
+                        ms.Write(BitConverter.GetBytes(element.Value.GetSingle()));
+                        break;
+                    case "int64":
+                        ms.Write(BitConverter.GetBytes(element.Value.GetInt64()));
+                        break;
+                    case "float64":
+                        ms.Write(BitConverter.GetBytes(element.Value.GetDouble()));
+                        break;
+                    case "string":
+                        string str = element.Value.GetString();
+                        Varint.Write(ms, str.Length);
+                        ms.Write(Encoding.UTF8.GetBytes(str));
+                        break;
+                    case "base64":  
+                        {
+                            switch (element.Value.ValueKind)
+                            {
+                                case JsonValueKind.Object: 
+                                {
+                                    using var base64ms = new MemoryStream();
+                                    Deserialize(base64ms, element.Value);
+
+                                    Varint.Write(ms, base64ms.Length);
+
+                                    Console.WriteLine(element.Value);
+                                    base64ms.WriteTo(ms);
+                                    break;
+                                }
+                                case JsonValueKind.String:
+                                    string base64str = element.Value.GetString();
+                                    Varint.Write(ms, base64str.Length);
+                                    ms.Write(Encoding.UTF8.GetBytes(base64str));
+                                    break;
+                            }
+                            break;
+                        }
+                    case "embedded":
+                        {
+                            using var embeddedMs = new MemoryStream();
+                            Deserialize(embeddedMs, element.Value);
+
+                            Varint.Write(ms, embeddedMs.Length);
+
+                            embeddedMs.WriteTo(ms);
+                            break;
+                        }
+                    case "bytes": 
+                        string byteStr = element.Value.GetString();
+                        Varint.Write(ms, byteStr.Length);
+                        ms.Write(Encoding.UTF8.GetBytes(byteStr));
                         break;
                     default:
                         throw new Exception("Unknown WireType");

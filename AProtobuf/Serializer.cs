@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Web;
 
 namespace AProtobuf
@@ -166,7 +167,7 @@ namespace AProtobuf
             {
                 var parts = element.Key.ToString().Split(':');
                 var fieldNumber = Convert.ToInt64(parts[0]);
-                var type = parts[2];
+                var type = parts[parts.Length - 1];
 
                 var header = (fieldNumber << 3) | TagMap[type];
                 Varint.Write(ms, header);
@@ -185,6 +186,9 @@ namespace AProtobuf
                     case "int64":
                         ms.Write(BitConverter.GetBytes((long)element.Value));
                         break;
+                    case "float64":
+                        ms.Write(BitConverter.GetBytes((double)element.Value));
+                        break;
                     case "string":
                         string str = (string)element.Value;
                         Varint.Write(ms, str.Length);
@@ -194,7 +198,6 @@ namespace AProtobuf
                         {
                             using var base64ms = new MemoryStream();
                             Deserialize(base64ms, (Hashtable)element.Value);
-                            base64ms.Position = 0;
 
                             var base64Buffer = Encoding.UTF8.GetBytes(Convert.ToBase64String(base64ms.ToArray()));
                             Varint.Write(ms, base64Buffer.Length);
@@ -206,7 +209,6 @@ namespace AProtobuf
                         {
                             using var embeddedMs = new MemoryStream();
                             Deserialize(embeddedMs, (Hashtable)element.Value);
-                            embeddedMs.Position = 0;
 
                             Varint.Write(ms, (long)embeddedMs.Length);
                             embeddedMs.CopyTo(ms);
@@ -218,7 +220,7 @@ namespace AProtobuf
                         ms.Write(buffer);
                         break;
                     default:
-                        throw new Exception("Unknown wireType");
+                        throw new Exception("Unknown WireType");
                 }
             }
         }

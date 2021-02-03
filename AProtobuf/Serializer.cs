@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Web;
 using NeoSmart.Utils;
-
+using System.Collections.Specialized;
 
 namespace AProtobuf
 {
@@ -23,9 +23,9 @@ namespace AProtobuf
         }
 
         private static UTF8Encoding UTF8 = new UTF8Encoding(false, true);
-        public static Hashtable SerializeAsHashtable(MemoryStream ms)
+        public static IDictionary Serialize(MemoryStream ms, Func<IDictionary> dictionaryConstructor)
         {
-            Hashtable dictionary = new Hashtable();
+            IDictionary dictionary = dictionaryConstructor();
             int index = 0; // needed for repeated elements (assuming that you want to keep within a dict)
 
             while (ms.Position != ms.Length)
@@ -114,7 +114,7 @@ namespace AProtobuf
                                 {
                                     var payload = UrlBase64.Decode(HttpUtility.UrlDecode(bufStr));
                                     using var innerMs = new MemoryStream(payload);
-                                    dictionary[$"{fieldStr}:base64"] = SerializeAsHashtable(innerMs);
+                                    dictionary[$"{fieldStr}:base64"] = Serialize(innerMs, dictionaryConstructor);
                                 }
                                 catch
                                 {
@@ -128,7 +128,7 @@ namespace AProtobuf
                         try 
                         {
                             using var innerMs = new MemoryStream(buf);
-                            dictionary[$"{fieldStr}:embedded"] = SerializeAsHashtable(innerMs);
+                            dictionary[$"{fieldStr}:embedded"] = Serialize(innerMs, dictionaryConstructor);
                         }
                         catch 
                         {
@@ -141,6 +141,11 @@ namespace AProtobuf
                 index++;
             }
             return dictionary;
+        }
+
+        public static OrderedDictionary SerializeAsOrderedDictionary(MemoryStream ms)
+        {
+            return (OrderedDictionary)Serialize(ms, () => new OrderedDictionary());
         }
 
         public static readonly Dictionary<string, long> TagMap = new Dictionary<string, long>
@@ -156,14 +161,14 @@ namespace AProtobuf
             {"bytes", 2 },
         };
 
-        public static byte[] Deserialize(Hashtable protobuf)
+        public static byte[] Deserialize(IDictionary protobuf)
         {
             using var ms = new MemoryStream();
             Deserialize(ms, protobuf);
             return ms.ToArray();
         }
 
-        public static void Deserialize(MemoryStream ms, Hashtable protobuf)
+        public static void Deserialize(MemoryStream ms, IDictionary protobuf)
         {
             foreach (DictionaryEntry element in protobuf)
             {
@@ -199,7 +204,7 @@ namespace AProtobuf
                     case "base64":
                         {
                             using var base64ms = new MemoryStream();
-                            Deserialize(base64ms, (Hashtable)element.Value);
+                            Deserialize(base64ms, (IDictionary)element.Value);
                             base64ms.Position = 0;
 
                             var base64Buffer = Encoding.UTF8.GetBytes(Convert.ToBase64String(base64ms.ToArray()));
@@ -211,7 +216,7 @@ namespace AProtobuf
                     case "embedded":
                         {
                             using var embeddedMs = new MemoryStream();
-                            Deserialize(embeddedMs, (Hashtable)element.Value);
+                            Deserialize(embeddedMs, (IDictionary)element.Value);
                             embeddedMs.Position = 0;
 
                             Varint.Write(ms, (long)embeddedMs.Length);
@@ -227,6 +232,13 @@ namespace AProtobuf
                         throw new Exception("Unknown WireType");
                 }
             }
+        }
+
+        public static byte[] Deserialize(JsonElement json)
+        {
+            using var ms = new MemoryStream();
+            Deserialize(ms, json);
+            return ms.ToArray();
         }
 
         public static void Deserialize(MemoryStream ms, JsonElement json)
@@ -300,9 +312,9 @@ namespace AProtobuf
                             break;
                         }
                     case "bytes": 
-                        var byteStr = element.Value.GetString();
-                        Varint.Write(ms, byteStr.Length);
-                        ms.Write(Encoding.UTF8.GetBytes(byteStr));
+                        var buffer = element.Value.GetBytesFromBase64();
+                        Varint.Write(ms, buffer.Length);
+                        ms.Write(buffer);
                         break;
                     default:
                         throw new Exception("Unknown WireType");

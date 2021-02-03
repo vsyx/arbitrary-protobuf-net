@@ -1,58 +1,27 @@
+using System;
 using System.Collections;
 using System.IO;
 using System.Web;
+using NeoSmart.Utils;
 using NUnit.Framework;
 
 namespace AProtobuf.Test
 {
     public class SerializerTest
     {
-        private const string ProtobufStr = "4qmFsgJUEhhVQ2ExMG54U2hoek5yQ0UxbzJaT1B6dGcaOEVnWjJhV1JsYjNNWUF5QUFNQUU0QWVvREYwTm5Ua1JTUld0VFEyZHBXVGx4Y1ZZeVQxZHFPVVEw";
+        private const string ProtoBufferUrlSafeBase64 = "CLlgEgVTdGV2ZRIFU21pdGgaFQoGRmxhdCAxEgtUaGUgTWVhZG93cyIcQ2daR2JHRjBJREVTQzFSb1pTQk5aV0ZrYjNkeioFGIABjAQ";
 
         [Test]
         public void SerializeAndDeserializeEqualityTest()
         {
-            var payload = AProtobuf.Util.FromBase64StringWithoutPadding(HttpUtility.UrlDecode(ProtobufStr));
+            var payload = UrlBase64.Decode(ProtoBufferUrlSafeBase64);
             using var ms = new MemoryStream(payload);
 
-            var hashtableOriginal = AProtobuf.Serializer.SerializeAsHashtable(ms);
+            var dictionaryOriginal = AProtobuf.Serializer.SerializeAsOrderedDictionary(ms);
 
-            // The deserialized version of the string/bytes is rarely going to be equal, since order is not maintained.
-            // With base64, padding may be added as well, but the underlying data should remain the same.
+            var payloadDeserialized = UrlBase64.Encode(AProtobuf.Serializer.Deserialize(dictionaryOriginal));
 
-            var payaloadOfDeserialized = AProtobuf.Serializer.Deserialize(hashtableOriginal);
-
-            using var ms2 = new MemoryStream(payload);
-            var hashtableDeserialized = AProtobuf.Serializer.SerializeAsHashtable(ms2);
-
-            Assert.True(HashTableADataEqualToB(hashtableOriginal, hashtableDeserialized));
-        }
-
-        private bool HashTableADataEqualToB(Hashtable a, Hashtable b)
-        {
-            foreach (DictionaryEntry entry in a)
-            {
-                if (!b.ContainsKey(entry.Key)) 
-                {
-                    return false;
-                }
-
-                if (entry.Value.GetType() == typeof(Hashtable))
-                {
-                    if (b[entry.Key].GetType() != typeof(Hashtable)
-                        || !HashTableADataEqualToB((Hashtable)entry.Value, (Hashtable)b[entry.Key]))
-                    {
-                        return false;
-                    }
-                    continue;
-                }
-
-                if (!entry.Value.Equals(b[entry.Key]))
-                {
-                    return false;
-                }
-            }
-            return true;
+            Assert.AreEqual(ProtoBufferUrlSafeBase64, payloadDeserialized);
         }
     }
 }

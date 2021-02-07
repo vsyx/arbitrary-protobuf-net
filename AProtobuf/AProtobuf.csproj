@@ -6,6 +6,7 @@
     <Authors>vsyx</Authors>
     <Version>1.0.0</Version>
     <PackageLicenseExpression>Unlicense</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/vsyx/arbitrary-protobuf-net</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

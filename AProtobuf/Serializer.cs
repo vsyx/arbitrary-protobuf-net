@@ -21,9 +21,11 @@ namespace AProtobuf
             EndGroup = 4,
             Bit32 = 5
         }
-
         private static UTF8Encoding UTF8 = new UTF8Encoding(false, true);
-        public static IDictionary Serialize(MemoryStream ms, Func<IDictionary> dictionaryConstructor)
+        public static IDictionary Serialize(
+            MemoryStream ms,
+            Func<IDictionary> dictionaryConstructor,
+            bool TryDecodeBase64 = true)
         {
             IDictionary dictionary = dictionaryConstructor();
             int index = 0; // needed for repeated elements (assuming that you want to keep within a dict)
@@ -107,19 +109,21 @@ namespace AProtobuf
                                 dictionary[$"{fieldStr}:string"] = String.Empty;
                                 break;
                             }
-
                             if (!ContainsNonFeedControlCharacters(buf))
                             {
-                                try
+                                if (TryDecodeBase64)
                                 {
-                                    var payload = UrlBase64.Decode(HttpUtility.UrlDecode(bufStr));
-                                    using var innerMs = new MemoryStream(payload);
-                                    dictionary[$"{fieldStr}:base64"] = Serialize(innerMs, dictionaryConstructor);
+                                    try
+                                    {
+                                        var payload = UrlBase64.Decode(HttpUtility.UrlDecode(bufStr));
+                                        using var innerMs = new MemoryStream(payload);
+                                        dictionary[$"{fieldStr}:base64"] = Serialize(innerMs, dictionaryConstructor);
+                                        break;
+                                    }
+                                    catch { }
                                 }
-                                catch
-                                {
-                                    dictionary[$"{fieldStr}:string"] = bufStr;
-                                }
+                                // assume that it's a valid string, either way you can always handle it manually
+                                dictionary[$"{fieldStr}:string"] = bufStr;
                                 break;
                             }
                         }

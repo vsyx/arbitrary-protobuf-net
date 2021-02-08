@@ -4,9 +4,9 @@ Library to encode and decode arbitrary protobuf data.
 
 # Installation
 
-`sh
+```sh
 dotnet add package arbitrary-protobuf-net
-`
+```
 
 ## Example usage
 

@@ -22,12 +22,11 @@ namespace AProtobuf
             Bit32 = 5
         }
         private static UTF8Encoding UTF8 = new UTF8Encoding(false, true);
-        public static IDictionary Serialize(
+        public static T Serialize<T>(
             MemoryStream ms,
-            Func<IDictionary> dictionaryConstructor,
-            bool TryDecodeBase64 = true)
+            bool tryDecodeBase64 = true) where T : IDictionary, new()
         {
-            IDictionary dictionary = dictionaryConstructor();
+            T dictionary = new T();
             int index = 0; // needed for repeated elements (assuming that you want to keep within a dict)
 
             while (ms.Position != ms.Length)
@@ -111,13 +110,13 @@ namespace AProtobuf
                             }
                             if (!ContainsNonFeedControlCharacters(buf))
                             {
-                                if (TryDecodeBase64)
+                                if (tryDecodeBase64)
                                 {
                                     try
                                     {
                                         var payload = UrlBase64.Decode(HttpUtility.UrlDecode(bufStr));
                                         using var innerMs = new MemoryStream(payload);
-                                        dictionary[$"{fieldStr}:base64"] = Serialize(innerMs, dictionaryConstructor);
+                                        dictionary[$"{fieldStr}:base64"] = Serialize<T>(innerMs, tryDecodeBase64);
                                         break;
                                     }
                                     catch { }
@@ -132,7 +131,7 @@ namespace AProtobuf
                         try 
                         {
                             using var innerMs = new MemoryStream(buf);
-                            dictionary[$"{fieldStr}:embedded"] = Serialize(innerMs, dictionaryConstructor);
+                            dictionary[$"{fieldStr}:embedded"] = Serialize<T>(innerMs, tryDecodeBase64);
                         }
                         catch 
                         {
@@ -147,9 +146,9 @@ namespace AProtobuf
             return dictionary;
         }
 
-        public static OrderedDictionary SerializeAsOrderedDictionary(MemoryStream ms)
+        public static OrderedDictionary SerializeAsOrderedDictionary(MemoryStream ms, bool tryDecodeBase64 = true)
         {
-            return (OrderedDictionary)Serialize(ms, () => new OrderedDictionary());
+            return Serialize<OrderedDictionary>(ms, tryDecodeBase64);
         }
 
         public static readonly Dictionary<string, long> TagMap = new Dictionary<string, long>
@@ -186,7 +185,7 @@ namespace AProtobuf
                 switch (type)
                 {
                     case "varint":
-                        Varint.Write(ms, (long)element.Value);
+                        Varint.Write(ms, Convert.ToInt64(element.Value));
                         break;
                     case "int32":
                         ms.Write(BitConverter.GetBytes((int)element.Value));
